@@ -24,6 +24,26 @@ ORDINALS_NOM = {
     '6': 'шестая'
 }
 
+DAYS_ACC = {
+    0: 'понедельник',
+    1: 'вторник',
+    2: 'среду',
+    3: 'четверг',
+    4: 'пятницу',
+    5: 'субботу',
+    6: 'воскресенье'
+}
+
+DAYS_CLEAN = {
+    0: 'в понедельник',
+    1: 'во вторник',
+    2: 'в среду',
+    3: 'в четверг',
+    4: 'в пятницу',
+    5: 'в субботу',
+    6: 'в воскресенье'
+}
+
 def get_corpus_phrase(room_str):
     low_room = room_str.lower()
     if 'с/з' in low_room or 'с.з' in low_room or 'спорт' in low_room:
@@ -43,6 +63,20 @@ def clean_subject(subj):
     if 'физ' in low and ('здоров' in low or 'культ' in low):
         return 'Физкультура'
     return subj
+
+def extract_schedule_date(page):
+    m = re.search(r'(\d{2})\.(\d{2})\.(\d{2,4})', page)
+    if not m:
+        return None
+    d = int(m.group(1))
+    mo = int(m.group(2))
+    y = int(m.group(3))
+    if y < 100:
+        y += 2000
+    try:
+        return datetime(y, mo, d).date()
+    except Exception:
+        return None
 
 def fetch_page(num, ctx):
     url = 'https://mgak1.by' + f'/assets/site/raspisanie/{num}.htm'
@@ -142,41 +176,52 @@ class handler(BaseHTTPRequestHandler):
         ctx.verify_mode = ssl.CERT_NONE
 
         tz_minsk = timezone(timedelta(hours=3))
-        now_minsk = datetime.now(tz_minsk)
-        wd = now_minsk.weekday()
+        today_date = datetime.now(tz_minsk).date()
+        tomorrow_date = today_date + timedelta(days=1)
 
         ans = ''
         try:
-            if wd in (4, 5, 6):
+            valid_items = list()
+            for num in ('1', '2'):
+                try:
+                    page = fetch_page(num, ctx)
+                    sched_date = extract_schedule_date(page)
+                    fp, les, cl = parse_schedule(page)
+                    if les:
+                        if sched_date is None or sched_date >= today_date:
+                            valid_items.append((sched_date, fp, les, cl))
+                except Exception:
+                    pass
+
+            valid_items.sort(key=lambda x: x.__getitem__(0) or today_date)
+
+            if len(valid_items) >= 2:
                 blocks = list()
-                try:
-                    p1 = fetch_page('1', ctx)
-                    fp1, les1, cl1 = parse_schedule(p1)
-                    b1 = format_day_block('Расписание на субботу:', fp1, les1, cl1, 'в субботу')
-                    if b1:
-                        blocks.append(b1)
-                except Exception:
-                    pass
-
-                try:
-                    p2 = fetch_page('2', ctx)
-                    fp2, les2, cl2 = parse_schedule(p2)
-                    b2 = format_day_block('Расписание на понедельник:', fp2, les2, cl2, 'в понедельник')
-                    if b2:
-                        blocks.append(b2)
-                except Exception:
-                    pass
-
-                if blocks:
-                    ans = ' '.join(blocks)
+                for sched_date, fp, les, cl in valid_items:
+                    if sched_date:
+                        wd = sched_date.weekday()
+                        prefix = f'Расписание на {DAYS_ACC.get(wd, "")}:'
+                        clean_w = DAYS_CLEAN.get(wd, 'в этот день')
+                    else:
+                        prefix = 'Расписание:'
+                        clean_w = 'в этот день'
+                    b = format_day_block(prefix, fp, les, cl, clean_w)
+                    if b:
+                        blocks.append(b)
+                ans = ' '.join(blocks)
+            elif len(valid_items) == 1:
+                sched_date, fp, les, cl = valid_items.__getitem__(0)
+                if sched_date == today_date:
+                    ans = format_day_block('Сегодня', fp, les, cl, 'сегодня')
+                elif sched_date == tomorrow_date or sched_date is None:
+                    ans = format_day_block('Завтра', fp, les, cl, 'завтра')
                 else:
-                    ans = 'Расписание для группы 4ЭС на субботу и понедельник пока не найдено.'
+                    wd = sched_date.weekday()
+                    prefix = f'Расписание на {DAYS_ACC.get(wd, "")}:'
+                    clean_w = DAYS_CLEAN.get(wd, 'в этот день')
+                    ans = format_day_block(prefix, fp, les, cl, clean_w)
             else:
-                p2 = fetch_page('2', ctx)
-                fp2, les2, cl2 = parse_schedule(p2)
-                ans = format_day_block('Завтра', fp2, les2, cl2, 'завтра')
-                if not ans:
-                    ans = 'Расписание для группы 4ЭС на завтра пока не найдено.'
+                ans = 'Актуальное расписание для группы 4ЭС пока не выложено.'
         except Exception as e:
             ans = f'Ошибка загрузки {str(e)}'
 
