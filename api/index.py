@@ -1,5 +1,6 @@
 from http.server import BaseHTTPRequestHandler
 import urllib.request
+import html as htmllib
 import ssl
 import json
 import re
@@ -29,23 +30,47 @@ class handler(BaseHTTPRequestHandler):
             req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
             raw = urllib.request.urlopen(req, timeout=8, context=ctx).read()
             
-            html = raw.decode('cp1251', errors='ignore')
-            if 'Предмет' not in html and '4ЭС' not in html:
-                html = raw.decode('cp866', errors='ignore')
-            if 'Предмет' not in html and '4ЭС' not in html:
-                html = raw.decode('utf-8', errors='ignore')
+            page = raw.decode('cp1251', errors='ignore')
+            page = re.sub(r'</p>|</div>|<br\s*/?>', '\n', page, flags=re.I)
+            page = re.sub(r'<[^>]+>', '', page)
+            page = htmllib.unescape(page)
+            
+            lines = page.splitlines()
+            lessons = list()
+            first_pair = None
+            capture = False
+            
+            for line in lines:
+                if '│' not in line:
+                    continue
+                parts = tuple(re.sub(r'\s+', ' ', p).strip() for p in line.split('│'))
+                if len(parts) < 5:
+                    continue
+                    
+                grp = parts.__getitem__(1).lower().replace(' ', '').replace('-', '')
+                if grp in ('4эс', 'эс4', '4с', 'с4'):
+                    capture = True
+                elif grp != '' and capture:
+                    break
+                    
+                if capture:
+                    pair_num = parts.__getitem__(2)
+                    subj = parts.__getitem__(3)
+                    room = parts.__getitem__(4)
+                    if pair_num.isdigit():
+                        if first_pair is None:
+                            first_pair = pair_num
+                        lessons.append(f'{pair_num} пара {subj} кабинет {room}')
+                    elif subj:
+                        lessons.append(f'также {subj} кабинет {room}')
 
-            if '4ЭС' in html or 'ЭС-4' in html or 'ЭС 4' in html:
-                idx = html.find('4ЭС')
-                if idx == -1:
-                    idx = html.find('ЭС')
-                snippet = re.sub(r'\s+', ' ', html[max(0, idx-50):idx+600])
-                ans = 'НАШЕЛ КУСОК: ' + snippet
+            if lessons:
+                prep = 'ко' if str(first_pair) == '2' else 'к'
+                ans = f'Завтра {prep} {first_pair} паре ' + ' '.join(lessons)
             else:
-                snippet = re.sub(r'\s+', ' ', html[len(html)//2 : len(html)//2 + 400])
-                ans = 'НЕ НАШЕЛ 4ЭС. СЕРЕДИНА ФАЙЛА: ' + snippet
+                ans = 'Расписание для группы 4ЭС пока не найдено'
         except Exception as e:
-            ans = 'ОШИБКА: ' + str(e)
+            ans = f'Ошибка загрузки {str(e)}'
 
         res = {
             'version': data.get('version', '1.0'),
