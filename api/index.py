@@ -19,7 +19,7 @@ class handler(BaseHTTPRequestHandler):
             data = dict()
 
         try:
-            url = 'https://mgak1.by'
+            url = 'https://mgak1.by' + '/assets/site/raspisanie/1.htm'
             req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
             html = urllib.request.urlopen(req, timeout=10).read().decode('cp1251', errors='ignore')
             
