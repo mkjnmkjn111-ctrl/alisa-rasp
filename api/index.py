@@ -112,6 +112,16 @@ def parse_schedule(page):
 
     return first_pair, lessons, cleaning
 
+def format_day_block(prefix, first_pair, lessons, cleaning, clean_day_word):
+    if not lessons:
+        return ''
+    prep = 'ко' if str(first_pair) == '2' else 'к'
+    first_gen = ORDINALS_GEN.get(str(first_pair), str(first_pair))
+    text = f'{prefix} {prep} {first_gen} паре. ' + ', '.join(lessons) + '.'
+    if cleaning:
+        text = text + f' Так же {clean_day_word} у вас уборка территории.'
+    return text
+
 class handler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.process()
@@ -133,20 +143,40 @@ class handler(BaseHTTPRequestHandler):
 
         tz_minsk = timezone(timedelta(hours=3))
         now_minsk = datetime.now(tz_minsk)
-        file_num = '1' if now_minsk.weekday() == 4 else '2'
+        wd = now_minsk.weekday()
 
         ans = ''
         try:
-            chosen_page = fetch_page(file_num, ctx)
-            first_pair, lessons, cleaning = parse_schedule(chosen_page)
-            if lessons:
-                prep = 'ко' if str(first_pair) == '2' else 'к'
-                first_gen = ORDINALS_GEN.get(str(first_pair), str(first_pair))
-                ans = f'Завтра {prep} {first_gen} паре. ' + ', '.join(lessons) + '.'
-                if cleaning:
-                    ans = ans + ' Так же завтра у вас уборка территории.'
+            if wd in (4, 5, 6):
+                blocks = list()
+                try:
+                    p1 = fetch_page('1', ctx)
+                    fp1, les1, cl1 = parse_schedule(p1)
+                    b1 = format_day_block('Расписание на субботу:', fp1, les1, cl1, 'в субботу')
+                    if b1:
+                        blocks.append(b1)
+                except Exception:
+                    pass
+
+                try:
+                    p2 = fetch_page('2', ctx)
+                    fp2, les2, cl2 = parse_schedule(p2)
+                    b2 = format_day_block('Расписание на понедельник:', fp2, les2, cl2, 'в понедельник')
+                    if b2:
+                        blocks.append(b2)
+                except Exception:
+                    pass
+
+                if blocks:
+                    ans = ' '.join(blocks)
+                else:
+                    ans = 'Расписание для группы 4ЭС на субботу и понедельник пока не найдено.'
             else:
-                ans = 'Расписание для группы 4ЭС пока не найдено.'
+                p2 = fetch_page('2', ctx)
+                fp2, les2, cl2 = parse_schedule(p2)
+                ans = format_day_block('Завтра', fp2, les2, cl2, 'завтра')
+                if not ans:
+                    ans = 'Расписание для группы 4ЭС на завтра пока не найдено.'
         except Exception as e:
             ans = f'Ошибка загрузки {str(e)}'
 
