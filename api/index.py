@@ -31,7 +31,8 @@ class handler(BaseHTTPRequestHandler):
             raw = urllib.request.urlopen(req, timeout=8, context=ctx).read()
             
             page = raw.decode('cp1251', errors='ignore')
-            page = re.sub(r'</p>|</div>|<br\s*/?>', '\n', page, flags=re.I)
+            page = re.sub(r'[\r\n]+', ' ', page)
+            page = re.sub(r'<p\b[^>]*>', '\n', page, flags=re.I)
             page = re.sub(r'<[^>]+>', '', page)
             page = htmllib.unescape(page)
             
