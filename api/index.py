@@ -25,6 +25,11 @@ ORDINALS_NOM = {
 }
 
 def get_corpus_phrase(room_str):
+    low_room = room_str.lower()
+    if 'с/з' in low_room or 'с.з' in low_room or 'спорт' in low_room:
+        return 'в спортивном зале'
+    if 'общ' in low_room:
+        return 'в общежитии'
     nums = re.findall(r'\d+', room_str)
     if not nums:
         return ''
@@ -32,6 +37,12 @@ def get_corpus_phrase(room_str):
     if room_num <= 100:
         return 'во втором корпусе'
     return 'в первом корпусе'
+
+def clean_subject(subj):
+    low = subj.lower()
+    if 'физ' in low and ('здоров' in low or 'культ' in low):
+        return 'Физкультура'
+    return subj
 
 def fetch_page(num, ctx):
     url = 'https://mgak1.by' + f'/assets/site/raspisanie/{num}.htm'
@@ -79,18 +90,19 @@ def parse_schedule(page):
                 continue
 
             corpus = get_corpus_phrase(room)
+            nice_subj = clean_subject(subj)
             if pair_num.isdigit():
                 if first_pair is None:
                     first_pair = pair_num
                 p_word = ORDINALS_NOM.get(pair_num, pair_num)
                 if len(lessons) == 0:
                     p_word = p_word.capitalize()
-                item = f'{p_word} пара {subj}'
+                item = f'{p_word} пара {nice_subj}'
                 if corpus:
                     item = f'{item} {corpus}'
                 lessons.append(item)
             elif subj:
-                item = f'также {subj}'
+                item = f'также {nice_subj}'
                 if corpus:
                     item = f'{item} {corpus}'
                 lessons.append(item)
