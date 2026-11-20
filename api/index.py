@@ -18,49 +18,59 @@ class handler(BaseHTTPRequestHandler):
         except Exception:
             data = dict()
 
-        try:
-            url = 'https://mgak1.by' + '/assets/site/raspisanie/1.htm'
-            req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-            html = urllib.request.urlopen(req, timeout=10).read().decode('cp1251', errors='ignore')
-            
-            text = re.sub(r'<[^>]+>', '', html)
-            lines = text.splitlines()
-            
-            lessons = list()
-            first_pair = None
-            capture = False
-            
-            for line in lines:
-                if '│' not in line:
-                    continue
-                parts = tuple(p.strip() for p in line.split('│'))
-                if len(parts) < 5:
-                    continue
-                    
-                grp = parts.__getitem__(1).lower().replace(' ', '')
-                if grp in ('эс4', '4эс', '4с'):
-                    capture = True
-                elif grp != '' and capture:
-                    break
-                    
-                if capture:
-                    pair_num = parts.__getitem__(2)
-                    subj = parts.__getitem__(3)
-                    room = parts.__getitem__(4)
-                    if pair_num:
-                        if first_pair is None:
-                            first_pair = pair_num
-                        lessons.append(f'{pair_num} пара {subj} кабинет {room}')
-                    elif subj:
-                        lessons.append(f'также {subj} кабинет {room}')
+        ans = ''
+        found_groups = list()
+        
+        for num in ('1', '2', '3'):
+            try:
+                url = 'https://mgak1.by' + f'/assets/site/raspisanie/{num}.htm'
+                req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+                html = urllib.request.urlopen(req, timeout=10).read().decode('cp1251', errors='ignore')
+                
+                text = re.sub(r'<[^>]+>', '', html)
+                lines = text.splitlines()
+                
+                lessons = list()
+                first_pair = None
+                capture = False
+                
+                for line in lines:
+                    if '│' not in line:
+                        continue
+                    parts = tuple(p.strip() for p in line.split('│'))
+                    if len(parts) < 5:
+                        continue
+                        
+                    raw_grp = parts.__getitem__(1)
+                    if raw_grp and raw_grp not in found_groups:
+                        found_groups.append(raw_grp)
+                        
+                    grp = raw_grp.lower().replace(' ', '').replace('-', '')
+                    if grp in ('эс4', '4эс', '4с', 'с4'):
+                        capture = True
+                    elif grp != '' and capture:
+                        break
+                        
+                    if capture:
+                        pair_num = parts.__getitem__(2)
+                        subj = parts.__getitem__(3)
+                        room = parts.__getitem__(4)
+                        if pair_num:
+                            if first_pair is None:
+                                first_pair = pair_num
+                            lessons.append(f'{pair_num} пара {subj} кабинет {room}')
+                        elif subj:
+                            lessons.append(f'также {subj} кабинет {room}')
 
-            if not lessons:
-                ans = 'Расписание для группы эс 4 пока не найдено'
-            else:
-                prep = 'ко' if str(first_pair) == '2' else 'к'
-                ans = f'Завтра {prep} {first_pair} паре ' + ' '.join(lessons)
-        except Exception as e:
-            ans = f'Ошибка загрузки {str(e)}'
+                if lessons:
+                    prep = 'ко' if str(first_pair) == '2' else 'к'
+                    ans = f'Завтра {prep} {first_pair} паре ' + ' '.join(lessons)
+                    break
+            except Exception:
+                continue
+
+        if not ans:
+            ans = 'Группа не найдена. В таблицах сейчас есть: ' + ', '.join(found_groups)
 
         res = {
             'version': data.get('version', '1.0'),
