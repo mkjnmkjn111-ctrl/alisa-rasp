@@ -132,38 +132,21 @@ class handler(BaseHTTPRequestHandler):
         ctx.verify_mode = ssl.CERT_NONE
 
         tz_minsk = timezone(timedelta(hours=3))
-        tomorrow = datetime.now(tz_minsk) + timedelta(days=1)
-        target_dd_mm = tomorrow.strftime('%d.%m')
+        now_minsk = datetime.now(tz_minsk)
+        file_num = '1' if now_minsk.weekday() == 4 else '2'
 
         ans = ''
         try:
-            pages = list()
-            for num in ('1', '2'):
-                try:
-                    pages.append(fetch_page(num, ctx))
-                except Exception:
-                    pass
-
-            chosen_page = None
-            for p in pages:
-                if target_dd_mm in p:
-                    chosen_page = p
-                    break
-            if chosen_page is None and pages:
-                chosen_page = pages.__getitem__(0)
-
-            if chosen_page:
-                first_pair, lessons, cleaning = parse_schedule(chosen_page)
-                if lessons:
-                    prep = 'ко' if str(first_pair) == '2' else 'к'
-                    first_gen = ORDINALS_GEN.get(str(first_pair), str(first_pair))
-                    ans = f'Завтра {prep} {first_gen} паре. ' + ', '.join(lessons) + '.'
-                    if cleaning:
-                        ans = ans + ' Так же завтра у вас уборка территории.'
-                else:
-                    ans = 'Расписание для группы 4ЭС на завтра пока не найдено.'
+            chosen_page = fetch_page(file_num, ctx)
+            first_pair, lessons, cleaning = parse_schedule(chosen_page)
+            if lessons:
+                prep = 'ко' if str(first_pair) == '2' else 'к'
+                first_gen = ORDINALS_GEN.get(str(first_pair), str(first_pair))
+                ans = f'Завтра {prep} {first_gen} паре. ' + ', '.join(lessons) + '.'
+                if cleaning:
+                    ans = ans + ' Так же завтра у вас уборка территории.'
             else:
-                ans = 'Не удалось загрузить расписание с сайта колледжа.'
+                ans = 'Расписание для группы 4ЭС пока не найдено.'
         except Exception as e:
             ans = f'Ошибка загрузки {str(e)}'
 
