@@ -24,57 +24,46 @@ class handler(BaseHTTPRequestHandler):
         ctx.verify_mode = ssl.CERT_NONE
 
         ans = ''
-        found_groups = list()
-        
         for num in ('1', '2', '3'):
             try:
                 url = 'https://mgak1.by' + f'/assets/site/raspisanie/{num}.htm'
                 req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
                 raw = urllib.request.urlopen(req, timeout=8, context=ctx).read()
                 
-                html = raw.decode('cp1251', errors='ignore')
-                if 'charset=utf-8' in html.lower() or 'encoding="utf-8"' in html.lower():
-                    html = raw.decode('utf-8', errors='ignore')
+                html = raw.decode('cp866', errors='ignore')
+                if 'Предмет' not in html and 'РАСПИСАНИЕ' not in html:
+                    html = raw.decode('cp1251', errors='ignore')
 
-                rows = re.findall(r'<tr[^>]*>(.*?)</tr>', html, flags=re.S | re.I)
+                text = re.sub(r'<[^>]+>', '', html)
+                lines = text.splitlines()
                 
                 lessons = list()
                 first_pair = None
                 capture = False
                 
-                for r in rows:
-                    cells = re.findall(r'<td[^>]*>(.*?)</td>', r, flags=re.S | re.I)
-                    clean = list()
-                    for c in cells:
-                        t = re.sub(r'<[^>]+>', ' ', c)
-                        t = t.replace('&nbsp;', ' ')
-                        t = re.sub(r'\s+', ' ', t).strip()
-                        clean.append(t)
-                        
-                    if not any(clean):
+                for line in lines:
+                    if '│' not in line:
+                        continue
+                    parts = tuple(p.strip() for p in line.split('│'))
+                    if len(parts) < 5:
                         continue
                         
-                    raw_grp = clean.__getitem__(0)
-                    if raw_grp and len(raw_grp) <= 10 and any(ch.isdigit() for ch in raw_grp):
-                        if raw_grp not in found_groups:
-                            found_groups.append(raw_grp)
-                            
-                    grp = raw_grp.lower().replace(' ', '').replace('-', '')
-                    if grp in ('эс4', '4эс', '4с', 'с4'):
+                    grp = parts.__getitem__(1).lower().replace(' ', '').replace('-', '')
+                    if grp in ('4эс', 'эс4', '4с', 'с4'):
                         capture = True
-                    elif grp != '' and any(ch.isdigit() for ch in grp) and capture:
+                    elif grp != '' and capture:
                         break
                         
-                    if capture and len(clean) >= 4:
-                        pair_num = clean.__getitem__(1)
-                        subj = clean.__getitem__(2)
-                        room = clean.__getitem__(3)
+                    if capture:
+                        pair_num = parts.__getitem__(2)
+                        subj = parts.__getitem__(3)
+                        room = parts.__getitem__(4)
                         if pair_num.isdigit():
                             if first_pair is None:
                                 first_pair = pair_num
                             lessons.append(f'{pair_num} пара {subj} кабинет {room}')
                         elif subj:
-                            lessons.append(f'также {subj} кабинет {room}')
+                            lessons.append(f'или {subj} кабинет {room}')
 
                 if lessons:
                     prep = 'ко' if str(first_pair) == '2' else 'к'
@@ -84,7 +73,7 @@ class handler(BaseHTTPRequestHandler):
                 continue
 
         if not ans:
-            ans = 'Группа не найдена. Найденные группы: ' + ', '.join(found_groups)
+            ans = 'Расписание для группы 4ЭС пока не найдено'
 
         res = {
             'version': data.get('version', '1.0'),
