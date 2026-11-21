@@ -67,6 +67,33 @@ BELLS_SATURDAY = {
     6: ((17, 25), (18, 10), (18, 20), (19, 5))
 }
 
+LOAD_PHRASES = {
+    'easy': (
+        'День {when} совсем легкий всего {cnt}.',
+        'Нагрузка {when} минимальная только {cnt}.',
+        'Всего {cnt} {when} почти выходной.',
+        'Суперлегкий график {when} всего {cnt}.'
+    ),
+    'short': (
+        'День {when} короткий всего {cnt}.',
+        'Нагрузка {when} спокойная только {cnt}.',
+        'Всего {cnt} {when} отличный темп.',
+        'Небольшой учебный день {when} всего {cnt}.'
+    ),
+    'normal': (
+        'Обычный рабочий день {when} ровно {cnt}.',
+        'Стандартная нагрузка {when} {cnt}.',
+        'График {when} привычный {cnt}.',
+        'Классический учебный день {when} {cnt}.'
+    ),
+    'hard': (
+        'День {when} плотный целых {cnt} держись.',
+        'Серьезная нагрузка {when} {cnt} подряд запасайся терпением.',
+        'Учебный день {when} насыщенный целых {cnt}.',
+        'График {when} тяжелый целых {cnt} придется потрудиться.'
+    )
+}
+
 WISHES = {
     'morning': (
         'Хорошего и легкого дня в колледже!',
@@ -220,6 +247,29 @@ def num_to_words(n, female=False):
     if o == 0:
         return tens.__getitem__(t)
     return f'{tens.__getitem__(t)} {ones.__getitem__(o)}'
+
+def pairs_count_word(n):
+    word = num_to_words(n, female=True)
+    if n == 1:
+        return f'{word} пара'
+    if 2 <= n <= 4:
+        return f'{word} пары'
+    return f'{word} пар'
+
+def build_load_comment(pairs_count, when_word):
+    if pairs_count <= 0:
+        return ''
+    cnt_str = pairs_count_word(pairs_count)
+    if pairs_count <= 2:
+        pool = LOAD_PHRASES['easy']
+    elif pairs_count == 3:
+        pool = LOAD_PHRASES['short']
+    elif pairs_count == 4:
+        pool = LOAD_PHRASES['normal']
+    else:
+        pool = LOAD_PHRASES['hard']
+    phrase = random.choice(pool).format(when=when_word, cnt=cnt_str)
+    return re.sub(r'\s+', ' ', phrase).strip()
 
 def time_to_words(hm):
     h, m = hm
@@ -438,6 +488,10 @@ def format_full_day(sched_date, pairs, cleaning, now_minsk):
         res = f'{header} {lessons_text}'
         if cleaning:
             res = f'{res} Так же сегодня у вас уборка территории.'
+        if state not in ('after_today', 'evening_rest'):
+            load_note = build_load_comment(len(pairs), 'сегодня')
+            if load_note:
+                res = f'{res} {load_note}'
         return res, state
 
     first_p_num = pairs.__getitem__(0).__getitem__(0)
@@ -448,6 +502,9 @@ def format_full_day(sched_date, pairs, cleaning, now_minsk):
         res = f'Завтра {prep} {first_gen} паре. {lessons_text}'
         if cleaning:
             res = f'{res} Так же завтра у вас уборка территории.'
+        load_note = build_load_comment(len(pairs), 'завтра')
+        if load_note:
+            res = f'{res} {load_note}'
         return res, 'tomorrow_new'
 
     wd = sched_date.weekday()
@@ -456,6 +513,9 @@ def format_full_day(sched_date, pairs, cleaning, now_minsk):
     res = f'Расписание на {day_acc}: {prep} {first_gen} паре. {lessons_text}'
     if cleaning:
         res = f'{res} Так же {day_clean} у вас уборка территории.'
+    load_note = build_load_comment(len(pairs), day_clean)
+    if load_note:
+        res = f'{res} {load_note}'
     return res, 'weekend_next'
 
 def get_cached_items(today_date):
@@ -511,6 +571,9 @@ def build_answer():
                 b = f'Расписание на {day_acc}: {prep} {first_gen} паре. {lessons_text}'
                 if cl:
                     b = f'{b} Так же {day_clean} у вас уборка территории.'
+                load_note = build_load_comment(len(pairs), day_clean)
+                if load_note:
+                    b = f'{b} {load_note}'
                 blocks.append(b)
         end_wish = random.choice(WISHES['weekend_next'])
         return ' '.join(blocks) + f' {end_wish}'
