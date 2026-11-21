@@ -3,12 +3,13 @@ from datetime import datetime, timedelta, timezone
 from concurrent.futures import ThreadPoolExecutor
 import urllib.request
 import html as htmllib
+import random
 import ssl
 import json
 import time
 import re
 
-CACHE = {'ts': 0, 'ans': ''}
+CACHE = {'ts': 0, 'items': None}
 
 ORDINALS_GEN = {
     '1': 'первой',
@@ -64,6 +65,83 @@ BELLS_SATURDAY = {
     4: ((13, 45), (14, 30), (14, 40), (15, 25)),
     5: ((15, 35), (16, 20), (16, 30), (17, 15)),
     6: ((17, 25), (18, 10), (18, 20), (19, 5))
+}
+
+WISHES = {
+    'morning': (
+        'Хорошего и легкого дня в колледже!',
+        'Удачного учебного дня, пускай пары пролетят незаметно!',
+        'Бодрого утра и отличного настроения на весь день!',
+        'Не забудь ничего важного дома, удачи на парах!',
+        'Пусть день в колледже пройдет спокойно и без лишних напрягов!',
+        'Желаю легких пар и адекватных преподавателей сегодня!',
+        'Продуктивного дня и отличных оценок!',
+        'Хорошего старта дня, пускай время в колледже летит быстро!',
+        'Удачи в колледже, держись бодрячком!',
+        'Пусть сегодняшний день пройдет максимально на лайте!',
+        'Отличного настроения и легкой учебы сегодня!',
+        'Желаю, чтобы все пары сегодня прошли интересно и быстро!'
+    ),
+    'lesson': (
+        'Терпения, скоро уже прозвенит звонок!',
+        'Держись, до конца осталось совсем немного!',
+        'Не засыпай на паре, звонок уже близко!',
+        'Сил тебе досидеть до конца и уйти на заслуженный отдых!',
+        'Продуктивной работы на занятии!',
+        'Пусть эта пара пролетит как одна минута!',
+        'Сосредоточься немного, перемена уже не за горами!',
+        'Крепись, учебный день уверенно движется к концу!',
+        'Удачи на паре, пусть тебя сегодня лишний раз не дергают!',
+        'Спокойно досидеть до звонка и выдохнуть!'
+    ),
+    'lunch': (
+        'Приятного аппетита и хорошего отдыха на большой перемене!',
+        'Вкусного обеда, наберись сил на оставшиеся пары!',
+        'Приятного аппетита! Самое время нормально перекусить и отдохнуть.',
+        'Хорошего обеденного перерыва и вкусной еды!',
+        'Приятного аппетита, передохни от учебы как следует!',
+        'Вкусного перекуса и отличного настроения на вторую половину дня!',
+        'Приятного аппетита! Поешь плотно, впереди еще занятия.',
+        'Отличного аппетита и спокойной большой перемены!',
+        'Приятного аппетита, заряжайся энергией перед следующей парой!',
+        'Вкусного обеда и приятного общения на перемене!'
+    ),
+    'break': (
+        'Самое время немного размяться и подготовиться к следующему уроку!',
+        'Не забудь подготовиться к паре и проверить нужный кабинет!',
+        'Успей перевести дух и настроиться на следующее занятие!',
+        'Передохни пару минут и готовься к продолжению!',
+        'Самое время проветриться и подготовить тетради к уроку!',
+        'Не опаздывай на звонок, удачи на следующей паре!',
+        'Быстрого отдыха на перемене и легкой следующей пары!',
+        'Проверь, все ли готово к занятию, скоро звонок!',
+        'Переключись на пару минут и спокойно готовься к уроку!',
+        'Отличной перемены, наберись сил перед звонком!'
+    ),
+    'after_today': (
+        'Поздравляю с окончанием учебного дня, можно спокойно отдыхать!',
+        'Пары на сегодня всё, отличного отдыха после колледжа!',
+        'Учебный день позади, заслуженный отдых!',
+        'Поздравляю, на сегодня с учебой покончено, хорошего вечера!',
+        'Отличная работа, сегодня ты свободен, отдыхай!',
+        'С окончанием пар! Самое время расслабиться и заняться своими делами.',
+        'На сегодня все занятия закончились, отличного продолжения дня!',
+        'Поздравляю с завершением пар, хорошего отдыха дома!',
+        'Ура, пары закончились! Набирайся сил и отдыхай.',
+        'Сегодняшний марафон в колледже пройден, отличного вечера!'
+    ),
+    'tomorrow_new': (
+        'Хорошего вечера, не забудь вовремя лечь спать перед завтрашним днем!',
+        'Отдыхай как следует и набирайся сил на завтра!',
+        'Спокойного вечера и легкого подъема завтра утром!',
+        'Удачи завтра в колледже, а сегодня хорошо отдохни!',
+        'Собери все нужное с вечера и отлично выспись!',
+        'Хорошего отдыха сегодня, чтобы завтра быть на высоте!',
+        'Пусть завтрашний день пройдет легко и без сюрпризов!',
+        'Отличного вечера и бодрого утра завтра!',
+        'Заряжайся энергией на завтрашние пары, хорошего отдыха!',
+        'Спокойной подготовки к завтрашнему дню и отличного настроения!'
+    )
 }
 
 SUBJECT_MAP = (
@@ -264,7 +342,7 @@ def format_lessons_list(pairs):
 
 def build_today_status(pairs, now_minsk, is_saturday):
     if not pairs:
-        return ''
+        return '', 'after_today'
     bells = BELLS_SATURDAY if is_saturday else BELLS_WEEKDAY
     now_m = now_minsk.hour * 60 + now_minsk.minute
 
@@ -276,17 +354,17 @@ def build_today_status(pairs, now_minsk, is_saturday):
     first_bell = bells.get(first_p_num)
     last_bell = bells.get(last_p_num)
     if not first_bell or not last_bell:
-        return f'Сегодня {prep} {first_gen} паре.'
+        return f'Сегодня {prep} {first_gen} паре.', 'morning'
 
     start_day_m = to_mins(first_bell.__getitem__(0))
     end_day_m = to_mins(last_bell.__getitem__(3))
 
     if now_m < start_day_m:
         t_words = time_to_words(first_bell.__getitem__(0))
-        return f'Сегодня {prep} {first_gen} паре, начало в {t_words}.'
+        return f'Сегодня {prep} {first_gen} паре, начало в {t_words}.', 'morning'
 
     if now_m >= end_day_m:
-        return f'Сегодня надо было {prep} {first_gen} паре.'
+        return f'Сегодня надо было {prep} {first_gen} паре.', 'after_today'
 
     for idx, (p_num, entries) in enumerate(pairs):
         b = bells.get(p_num)
@@ -303,19 +381,19 @@ def build_today_status(pairs, now_minsk, is_saturday):
 
         if s1 <= now_m < e1:
             rem = minutes_word(e1 - now_m)
-            return f'Сейчас идет первая половина {p_gen} пары {e1_gen}, до конца осталось {rem}. Сегодня надо было идти {prep} {first_gen} паре.'
+            return f'Сейчас идет первая половина {p_gen} пары {e1_gen}, до конца осталось {rem}. Сегодня надо было идти {prep} {first_gen} паре.', 'lesson'
 
         if e1 <= now_m < s2:
             rem = minutes_word(s2 - now_m)
             if p_num == 2 and not is_saturday:
                 if len(entries) >= 2 and e1_gen != e2_gen:
-                    return f'Сейчас обед, то есть середина второй пары {e1_gen} и {e2_gen}, до конца обеда осталось {rem}. После обеда будет половина пары {e2_gen}. Сегодня надо было идти {prep} {first_gen} паре.'
-                return f'Сейчас обед, то есть середина второй пары {e1_gen}, до конца обеда осталось {rem}. Сегодня надо было идти {prep} {first_gen} паре.'
-            return f'Сейчас перемена перед второй половиной {p_gen} пары {e2_gen}, до звонка осталось {rem}. Сегодня надо было идти {prep} {first_gen} паре.'
+                    return f'Сейчас обед, то есть середина второй пары {e1_gen} и {e2_gen}, до конца обеда осталось {rem}. После обеда будет половина пары {e2_gen}. Сегодня надо было идти {prep} {first_gen} паре.', 'lunch'
+                return f'Сейчас обед, то есть середина второй пары {e1_gen}, до конца обеда осталось {rem}. Сегодня надо было идти {prep} {first_gen} паре.', 'lunch'
+            return f'Сейчас перемена перед второй половиной {p_gen} пары {e2_gen}, до звонка осталось {rem}. Сегодня надо было идти {prep} {first_gen} паре.', 'break'
 
         if s2 <= now_m < e2:
             rem = minutes_word(e2 - now_m)
-            return f'Сейчас идет вторая половина {p_gen} пары {e2_gen}, до конца осталось {rem}. Сегодня надо было идти {prep} {first_gen} паре.'
+            return f'Сейчас идет вторая половина {p_gen} пары {e2_gen}, до конца осталось {rem}. Сегодня надо было идти {prep} {first_gen} паре.', 'lesson'
 
         if idx + 1 < len(pairs):
             next_p_num, next_entries = pairs.__getitem__(idx + 1)
@@ -326,9 +404,9 @@ def build_today_status(pairs, now_minsk, is_saturday):
                     rem = minutes_word(ns1 - now_m)
                     np_gen = ORDINALS_GEN.get(str(next_p_num), str(next_p_num))
                     ne_gen = next_entries.__getitem__(0).__getitem__(1)
-                    return f'Сейчас перемена перед {np_gen} парой {ne_gen}, до начала осталось {rem}. Сегодня надо было идти {prep} {first_gen} паре.'
+                    return f'Сейчас перемена перед {np_gen} парой {ne_gen}, до начала осталось {rem}. Сегодня надо было идти {prep} {first_gen} паре.', 'break'
 
-    return f'Сегодня надо было {prep} {first_gen} паре.'
+    return f'Сегодня надо было {prep} {first_gen} паре.', 'after_today'
 
 def format_full_day(sched_date, pairs, cleaning, now_minsk):
     today_date = now_minsk.date()
@@ -337,11 +415,11 @@ def format_full_day(sched_date, pairs, cleaning, now_minsk):
 
     if sched_date == today_date:
         is_sat = (sched_date.weekday() == 5)
-        header = build_today_status(pairs, now_minsk, is_sat)
+        header, state = build_today_status(pairs, now_minsk, is_sat)
         res = f'{header} {lessons_text}'
         if cleaning:
             res = f'{res} Так же сегодня у вас уборка территории.'
-        return res
+        return res, state
 
     first_p_num = pairs.__getitem__(0).__getitem__(0)
     first_gen = ORDINALS_GEN.get(str(first_p_num), str(first_p_num))
@@ -351,7 +429,7 @@ def format_full_day(sched_date, pairs, cleaning, now_minsk):
         res = f'Завтра {prep} {first_gen} паре. {lessons_text}'
         if cleaning:
             res = f'{res} Так же завтра у вас уборка территории.'
-        return res
+        return res, 'tomorrow_new'
 
     wd = sched_date.weekday()
     day_acc = DAYS_ACC.get(wd, '')
@@ -359,16 +437,12 @@ def format_full_day(sched_date, pairs, cleaning, now_minsk):
     res = f'Расписание на {day_acc}: {prep} {first_gen} паре. {lessons_text}'
     if cleaning:
         res = f'{res} Так же {day_clean} у вас уборка территории.'
-    return res
+    return res, 'tomorrow_new'
 
-def build_answer():
+def get_cached_items(today_date):
     now_ts = time.time()
-    if CACHE['ans'] and (now_ts - CACHE['ts']) < 180:
-        return CACHE['ans']
-
-    tz_minsk = timezone(timedelta(hours=3))
-    now_minsk = datetime.now(tz_minsk)
-    today_date = now_minsk.date()
+    if CACHE['items'] is not None and (now_ts - CACHE['ts']) < 180:
+        return CACHE['items']
 
     pages = list()
     with ThreadPoolExecutor(max_workers=2) as ex:
@@ -388,12 +462,25 @@ def build_answer():
                 valid_items.append((sched_date, pairs, cl))
 
     valid_items.sort(key=lambda x: x.__getitem__(0) or today_date)
+    if valid_items:
+        CACHE['ts'] = now_ts
+        CACHE['items'] = valid_items
+    return valid_items
+
+def build_answer():
+    tz_minsk = timezone(timedelta(hours=3))
+    now_minsk = datetime.now(tz_minsk)
+    today_date = now_minsk.date()
+
+    valid_items = get_cached_items(today_date)
 
     if len(valid_items) >= 2:
         blocks = list()
+        state = 'tomorrow_new'
         for sched_date, pairs, cl in valid_items:
             if sched_date == today_date:
-                blocks.append(format_full_day(sched_date, pairs, cl, now_minsk))
+                text_day, state = format_full_day(sched_date, pairs, cl, now_minsk)
+                blocks.append(text_day)
             else:
                 wd = sched_date.weekday() if sched_date else 0
                 day_acc = DAYS_ACC.get(wd, '')
@@ -406,17 +493,16 @@ def build_answer():
                 if cl:
                     b = f'{b} Так же {day_clean} у вас уборка территории.'
                 blocks.append(b)
-        ans = ' '.join(blocks)
-    elif len(valid_items) == 1:
-        sched_date, pairs, cl = valid_items.__getitem__(0)
-        ans = format_full_day(sched_date, pairs, cl, now_minsk)
-    else:
-        ans = 'Актуальное расписание для группы 4ЭС пока не выложено.'
+        wish = random.choice(WISHES.get(state, WISHES['tomorrow_new']))
+        return ' '.join(blocks) + f' {wish}'
 
-    if ans and 'пока не выложено' not in ans:
-        CACHE['ts'] = now_ts
-        CACHE['ans'] = ans
-    return ans
+    if len(valid_items) == 1:
+        sched_date, pairs, cl = valid_items.__getitem__(0)
+        text_day, state = format_full_day(sched_date, pairs, cl, now_minsk)
+        wish = random.choice(WISHES.get(state, WISHES['tomorrow_new']))
+        return f'{text_day} {wish}'
+
+    return 'Актуальное расписание для группы 4ЭС пока не выложено.'
 
 class handler(BaseHTTPRequestHandler):
     def do_GET(self):
