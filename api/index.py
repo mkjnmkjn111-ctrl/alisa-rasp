@@ -122,13 +122,23 @@ WISHES = {
         'Поздравляю с окончанием учебного дня, можно спокойно отдыхать!',
         'Пары на сегодня всё, отличного отдыха после колледжа!',
         'Учебный день позади, заслуженный отдых!',
-        'Поздравляю, на сегодня с учебой покончено, хорошего вечера!',
+        'Поздравляю, на сегодня с учебой покончено!',
         'Отличная работа, сегодня ты свободен, отдыхай!',
         'С окончанием пар! Самое время расслабиться и заняться своими делами.',
         'На сегодня все занятия закончились, отличного продолжения дня!',
         'Поздравляю с завершением пар, хорошего отдыха дома!',
         'Ура, пары закончились! Набирайся сил и отдыхай.',
-        'Сегодняшний марафон в колледже пройден, отличного вечера!'
+        'Сегодняшний марафон в колледже пройден, отличного отдыха!'
+    ),
+    'evening_rest': (
+        'Хорошего и спокойного вечера!',
+        'Отличного отдыха, набирайся сил!',
+        'Приятного вечера и хорошего настроения!',
+        'Отдыхай как следует и не засиживайся допоздна!',
+        'Спокойного вечера и полноценного отдыха!',
+        'Желаю хорошо расслабиться и отдохнуть!',
+        'Хорошего вечера, пускай завтрашний день пройдет легко!',
+        'Отличного отдыха после насыщенного дня!'
     ),
     'tomorrow_new': (
         'Хорошего вечера, не забудь вовремя лечь спать перед завтрашним днем!',
@@ -141,6 +151,14 @@ WISHES = {
         'Отличного вечера и бодрого утра завтра!',
         'Заряжайся энергией на завтрашние пары, хорошего отдыха!',
         'Спокойной подготовки к завтрашнему дню и отличного настроения!'
+    ),
+    'weekend_next': (
+        'Хороших выходных и удачи на новой неделе!',
+        'Отличного отдыха перед новой учебной неделей!',
+        'Набирайся сил на выходных, удачи в понедельник!',
+        'Хороших выходных, пускай новая неделя начнется легко!',
+        'Отдохни как следует на выходных перед новыми парами!',
+        'Спокойной подготовки к понедельнику и отличных выходных!'
     )
 }
 
@@ -342,7 +360,7 @@ def format_lessons_list(pairs):
 
 def build_today_status(pairs, now_minsk, is_saturday):
     if not pairs:
-        return '', 'after_today'
+        return '', 'evening_rest'
     bells = BELLS_SATURDAY if is_saturday else BELLS_WEEKDAY
     now_m = now_minsk.hour * 60 + now_minsk.minute
 
@@ -364,7 +382,8 @@ def build_today_status(pairs, now_minsk, is_saturday):
         return f'Сегодня {prep} {first_gen} паре, начало в {t_words}.', 'morning'
 
     if now_m >= end_day_m:
-        return f'Сегодня надо было {prep} {first_gen} паре.', 'after_today'
+        state = 'after_today' if (now_m - end_day_m) <= 60 else 'evening_rest'
+        return f'Сегодня надо было {prep} {first_gen} паре.', state
 
     for idx, (p_num, entries) in enumerate(pairs):
         b = bells.get(p_num)
@@ -406,7 +425,7 @@ def build_today_status(pairs, now_minsk, is_saturday):
                     ne_gen = next_entries.__getitem__(0).__getitem__(1)
                     return f'Сейчас перемена перед {np_gen} парой {ne_gen}, до начала осталось {rem}. Сегодня надо было идти {prep} {first_gen} паре.', 'break'
 
-    return f'Сегодня надо было {prep} {first_gen} паре.', 'after_today'
+    return f'Сегодня надо было {prep} {first_gen} паре.', 'evening_rest'
 
 def format_full_day(sched_date, pairs, cleaning, now_minsk):
     today_date = now_minsk.date()
@@ -437,7 +456,7 @@ def format_full_day(sched_date, pairs, cleaning, now_minsk):
     res = f'Расписание на {day_acc}: {prep} {first_gen} паре. {lessons_text}'
     if cleaning:
         res = f'{res} Так же {day_clean} у вас уборка территории.'
-    return res, 'tomorrow_new'
+    return res, 'weekend_next'
 
 def get_cached_items(today_date):
     now_ts = time.time()
@@ -476,11 +495,11 @@ def build_answer():
 
     if len(valid_items) >= 2:
         blocks = list()
-        state = 'tomorrow_new'
         for sched_date, pairs, cl in valid_items:
             if sched_date == today_date:
                 text_day, state = format_full_day(sched_date, pairs, cl, now_minsk)
-                blocks.append(text_day)
+                wish = random.choice(WISHES.get(state, WISHES['evening_rest']))
+                blocks.append(f'{text_day} {wish}')
             else:
                 wd = sched_date.weekday() if sched_date else 0
                 day_acc = DAYS_ACC.get(wd, '')
@@ -493,8 +512,8 @@ def build_answer():
                 if cl:
                     b = f'{b} Так же {day_clean} у вас уборка территории.'
                 blocks.append(b)
-        wish = random.choice(WISHES.get(state, WISHES['tomorrow_new']))
-        return ' '.join(blocks) + f' {wish}'
+        end_wish = random.choice(WISHES['weekend_next'])
+        return ' '.join(blocks) + f' {end_wish}'
 
     if len(valid_items) == 1:
         sched_date, pairs, cl = valid_items.__getitem__(0)
