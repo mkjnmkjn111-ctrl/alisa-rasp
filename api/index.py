@@ -94,6 +94,13 @@ LOAD_PHRASES = {
     )
 }
 
+END_TIME_PHRASES = (
+    'Освободишься в {t}.',
+    'Пары закончатся в {t}.',
+    'Свободен будешь в {t}.',
+    'Последний звонок прозвенит в {t}.'
+)
+
 WISHES = {
     'morning': (
         'Хорошего и легкого дня в колледже!',
@@ -270,6 +277,18 @@ def build_load_comment(pairs_count, when_word):
         pool = LOAD_PHRASES['hard']
     phrase = random.choice(pool).format(when=when_word, cnt=cnt_str)
     return re.sub(r'\s+', ' ', phrase).strip()
+
+def build_end_time_note(pairs, is_saturday):
+    if not pairs:
+        return ''
+    bells = BELLS_SATURDAY if is_saturday else BELLS_WEEKDAY
+    last_p_num = pairs.__getitem__(-1).__getitem__(0)
+    last_bell = bells.get(last_p_num)
+    if not last_bell:
+        return ''
+    end_hm = last_bell.__getitem__(3)
+    t_words = time_to_words(end_hm)
+    return random.choice(END_TIME_PHRASES).format(t=t_words)
 
 def time_to_words(hm):
     h, m = hm
@@ -492,11 +511,15 @@ def format_full_day(sched_date, pairs, cleaning, now_minsk):
             load_note = build_load_comment(len(pairs), 'сегодня')
             if load_note:
                 res = f'{res} {load_note}'
+            end_note = build_end_time_note(pairs, is_sat)
+            if end_note:
+                res = f'{res} {end_note}'
         return res, state
 
     first_p_num = pairs.__getitem__(0).__getitem__(0)
     first_gen = ORDINALS_GEN.get(str(first_p_num), str(first_p_num))
     prep = 'ко' if first_p_num == 2 else 'к'
+    is_sat_sched = (sched_date.weekday() == 5) if sched_date else False
 
     if sched_date == tomorrow_date or sched_date is None:
         res = f'Завтра {prep} {first_gen} паре. {lessons_text}'
@@ -505,6 +528,9 @@ def format_full_day(sched_date, pairs, cleaning, now_minsk):
         load_note = build_load_comment(len(pairs), 'завтра')
         if load_note:
             res = f'{res} {load_note}'
+        end_note = build_end_time_note(pairs, is_sat_sched)
+        if end_note:
+            res = f'{res} {end_note}'
         return res, 'tomorrow_new'
 
     wd = sched_date.weekday()
@@ -516,6 +542,9 @@ def format_full_day(sched_date, pairs, cleaning, now_minsk):
     load_note = build_load_comment(len(pairs), day_clean)
     if load_note:
         res = f'{res} {load_note}'
+    end_note = build_end_time_note(pairs, is_sat_sched)
+    if end_note:
+        res = f'{res} {end_note}'
     return res, 'weekend_next'
 
 def get_cached_items(today_date):
@@ -562,6 +591,7 @@ def build_answer():
                 blocks.append(f'{text_day} {wish}')
             else:
                 wd = sched_date.weekday() if sched_date else 0
+                is_sat_sched = (wd == 5)
                 day_acc = DAYS_ACC.get(wd, '')
                 day_clean = DAYS_CLEAN.get(wd, 'в этот день')
                 first_p = pairs.__getitem__(0).__getitem__(0)
@@ -574,6 +604,9 @@ def build_answer():
                 load_note = build_load_comment(len(pairs), day_clean)
                 if load_note:
                     b = f'{b} {load_note}'
+                end_note = build_end_time_note(pairs, is_sat_sched)
+                if end_note:
+                    b = f'{b} {end_note}'
                 blocks.append(b)
         end_wish = random.choice(WISHES['weekend_next'])
         return ' '.join(blocks) + f' {end_wish}'
