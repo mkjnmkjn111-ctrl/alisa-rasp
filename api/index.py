@@ -357,18 +357,6 @@ def format_full_day(sched_date, pairs, cleaning, now_minsk):
         res = f'{res} Так же {day_clean} у вас уборка территории.'
     return res
 
-def is_saturday_finished(sched_date, pairs, now_minsk):
-    if not sched_date or sched_date != now_minsk.date():
-        return False
-    if sched_date.weekday() != 5 or not pairs:
-        return False
-    last_p_num = pairs.__getitem__(-1).__getitem__(0)
-    last_bell = BELLS_SATURDAY.get(last_p_num)
-    if not last_bell:
-        return False
-    now_m = now_minsk.hour * 60 + now_minsk.minute
-    return now_m >= to_mins(last_bell.__getitem__(3))
-
 def build_answer():
     now_ts = time.time()
     if CACHE['ans'] and (now_ts - CACHE['ts']) < 180:
@@ -393,8 +381,7 @@ def build_answer():
         pairs, cl = parse_schedule(page)
         if pairs:
             if sched_date is None or sched_date >= today_date:
-                if not is_saturday_finished(sched_date, pairs, now_minsk):
-                    valid_items.append((sched_date, pairs, cl))
+                valid_items.append((sched_date, pairs, cl))
 
     valid_items.sort(key=lambda x: x.__getitem__(0) or today_date)
 
